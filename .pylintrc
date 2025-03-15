@@ -1,0 +1,2 @@
+[MASTER]
+ignore=CVS,.git,.venv,.ruff_cache
