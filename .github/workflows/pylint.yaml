@@ -1,0 +1,70 @@
+name: Pylint Linting
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  lint:
+    name: Run Pylint Linting Checks
+    runs-on: ubuntu-latest
+    env:
+      # Disable implicitly syncing before running - we run an explicit sync first.
+      UV_NO_SYNC: true
+
+    steps:
+      # Check out the repository
+      - uses: actions/checkout@v4
+
+      # Set up Python (base Python for `uv` to use)
+      - name: Set up base Python
+        uses: actions/setup-python@v5
+        with:
+          # This is the version of Python that `uv` will use.
+          python-version: 3.13
+
+      # Set up cache directory for `uv` on Linux/Mac
+      - name: Set up uv cache directory location (Linux/Mac)
+        run: echo "UV_CACHE_DIR=${{ runner.temp }}/.uv-cache" >> $GITHUB_ENV
+        if: runner.os != 'Windows'
+
+      # Set up cache directory for `uv` on Windows
+      - name: Set up uv cache directory location (Windows)
+        run: echo "UV_CACHE_DIR=${{ runner.temp }}/.uv-cache" >> $env:GITHUB_ENV
+        if: runner.os == 'Windows'
+
+      # Restore `uv` cache to speed up installs
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}-${{ matrix.python-version }}-dev
+          restore-keys: |
+            uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}-${{ matrix.python-version }}
+            uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+            uv-${{ runner.os }}
+
+      # Install latest versions of pip and uv
+      - name: Install latest versions of pip and uv
+        run: python -m pip install --upgrade pip uv
+
+      # Sync the dependencies with uv (using the --dev flag for dev dependencies)
+      - name: Install dev dependencies
+        run: uv sync --dev --locked
+
+      # Debug: Show installed packages
+      - name: Debug - uv pip freeze
+        run: uv pip freeze
+
+      # Run Pylint Linting
+      - name: Run Pylint
+        run: uv run pylint --rcfile=.pylintrc .
+
+      # Minimize `uv` cache to save space after CI
+      - name: Minimize UV cache
+        run: uv cache prune --ci
+        if: always()
